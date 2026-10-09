@@ -1,41 +1,46 @@
-from flask import Flask, request, render_template
+import streamlit as st
 import pandas as pd
 import joblib
 
-app = Flask(__name__)
-
-# Load the trained pipeline (scaler + logistic regression)
-# This file is created by your notebook's last step: joblib.dump(pipeline, 'model.pkl')
-pipeline = joblib.load("model.pkl")
+st.set_page_config(page_title="Crop Recommendation System", page_icon="🌾")
 
 FEATURES = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]
 
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    prediction = None
-    top5 = None
-
-    if request.method == "POST":
-        try:
-            values = [float(request.form[f]) for f in FEATURES]
-            input_df = pd.DataFrame([values], columns=FEATURES)
-
-            prediction = pipeline.predict(input_df)[0]
-
-            # Show top 5 crop probabilities, since logistic regression
-            # gives a confidence score for every crop, not just the top one
-            if hasattr(pipeline.named_steps["model"], "predict_proba"):
-                proba = pipeline.predict_proba(input_df)[0]
-                classes = pipeline.named_steps["model"].classes_
-                pairs = sorted(zip(classes, proba), key=lambda x: x[1], reverse=True)[:5]
-                top5 = [(name, round(prob * 100, 2)) for name, prob in pairs]
-
-        except Exception as e:
-            prediction = f"Error: {e}"
-
-    return render_template("index.html", prediction=prediction, top5=top5)
+@st.cache_resource
+def load_pipeline():
+    # Trained pipeline (scaler + logistic regression) saved from the notebook
+    return joblib.load("model.pkl")
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+pipeline = load_pipeline()
+
+st.title("🌾 Crop Recommendation System")
+st.write("Enter your soil nutrients and climate conditions to get the most suitable crop.")
+
+col1, col2 = st.columns(2)
+with col1:
+    N = st.number_input("Nitrogen (N)", min_value=0.0, max_value=200.0, value=50.0)
+    P = st.number_input("Phosphorus (P)", min_value=0.0, max_value=200.0, value=50.0)
+    K = st.number_input("Potassium (K)", min_value=0.0, max_value=250.0, value=50.0)
+    ph = st.number_input("Soil pH", min_value=0.0, max_value=14.0, value=6.5)
+with col2:
+    temperature = st.number_input("Temperature (°C)", min_value=0.0, max_value=60.0, value=25.0)
+    humidity = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, value=70.0)
+    rainfall = st.number_input("Rainfall (mm)", min_value=0.0, max_value=500.0, value=100.0)
+
+if st.button("Recommend Crop", type="primary"):
+    X = pd.DataFrame([[N, P, K, temperature, humidity, ph, rainfall]], columns=FEATURES)
+    prediction = pipeline.predict(X)[0]
+    st.success(f"Recommended crop: **{prediction}**")
+
+    if hasattr(pipeline, "predict_proba"):
+        probs = pipeline.predict_proba(X)[0]
+        top5 = (
+            pd.DataFrame({"Crop": pipeline.classes_, "Confidence (%)": (probs * 100).round(2)})
+            .sort_values("Confidence (%)", ascending=False)
+            .head(5)
+            .reset_index(drop=True)
+        )
+        st.subheader("Top 5 predictions")
+        st.dataframe(top5, use_container_width=True)
