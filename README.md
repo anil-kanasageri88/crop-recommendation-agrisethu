@@ -4,7 +4,7 @@
 
 A machine learning system that recommends the most suitable crop to grow based on soil nutrients (N, P, K) and climate conditions (temperature, humidity, pH, rainfall).
 
-Built as a submission for the **Agrisethu Final Round — Data Scientist Take-Home Assignment**.
+
 
 ---
 
